@@ -67,8 +67,8 @@ const handleControlsChange = () => {
   distance={450000}
   sunPosition={[100, 20, 100]}
   inclination={0.5}
-  azimuth={4}
-  rayleigh={4}
+  azimuth={2}
+  rayleigh={2.5}
   turbidity={10}
   mieCoefficient={0.005}
   mieDirectionalG={0.8}
