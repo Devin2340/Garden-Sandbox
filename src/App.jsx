@@ -1,11 +1,24 @@
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Sky } from '@react-three/drei'
+import { OrbitControls, Sky, useTexture } from '@react-three/drei'
 import { useState, useRef, useEffect } from 'react'
-import { PLANTS, getPlantById } from './plants'
+import * as THREE from 'three'
+import { PLANTS, getPlantById, GROUND_TYPES, getGroundById } from './plants'
 
 const STORAGE_KEY = 'garden-sandbox-v1'
 
-function Ground({ onClick }) {
+function Ground({ onClick, groundType }) {
+  return groundType.texture ? (
+    <TexturedGround onClick={onClick} groundType={groundType} />
+  ) : (
+    <SolidGround onClick={onClick} groundType={groundType} />
+  )
+}
+
+function TexturedGround({ onClick, groundType }) {
+  const texture = useTexture(groundType.texture)
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(8, 8)
+
   return (
     <mesh
       rotation={[-Math.PI / 2, 0, 0]}
@@ -14,7 +27,21 @@ function Ground({ onClick }) {
       receiveShadow
     >
       <planeGeometry args={[20, 20]} />
-      <meshStandardMaterial color="#4a7c3a" />
+      <meshStandardMaterial map={texture} />
+    </mesh>
+  )
+}
+
+function SolidGround({ onClick, groundType }) {
+  return (
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, 0, 0]}
+      onClick={onClick}
+      receiveShadow
+    >
+      <planeGeometry args={[20, 20]} />
+      <meshStandardMaterial color={groundType.color} />
     </mesh>
   )
 }
@@ -38,7 +65,7 @@ function Plant({ position, plantId, onClick }) {
   )
 }
 
-function Scene({ selectedPlantId, plants, setPlants }) {
+function Scene({ selectedPlantId, plants, setPlants, groundType }) {
   const orbitRef = useRef()
 
   const handleControlsChange = () => {
@@ -87,7 +114,7 @@ function Scene({ selectedPlantId, plants, setPlants }) {
         mieCoefficient={0.005}
         mieDirectionalG={0.8}
       />
-      <Ground onClick={handleGroundClick} />
+      <Ground onClick={handleGroundClick} groundType={groundType} />
       {plants.map((plant) => (
         <Plant
           key={plant.id}
@@ -112,7 +139,34 @@ function Scene({ selectedPlantId, plants, setPlants }) {
   )
 }
 
-function PlantPicker({ selectedPlantId, onSelect, onClearGarden }) {
+function PlantPicker({ selectedPlantId, onSelect, onClearGarden, groundTypeId, onGroundSelect }) {
+  const [isOpen, setIsOpen] = useState(true)
+  const [holdProgress, setHoldProgress] = useState(0)
+  const holdTimerRef = useRef(null)
+  const holdStartRef = useRef(null)
+
+  const startHold = () => {
+    holdStartRef.current = Date.now()
+    holdTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - holdStartRef.current
+      const progress = Math.min(elapsed / 1000, 1)
+      setHoldProgress(progress)
+      if (progress >= 1) {
+        clearInterval(holdTimerRef.current)
+        onClearGarden()
+        setHoldProgress(0)
+      }
+    }, 16)
+  }
+
+  const cancelHold = () => {
+    if (holdTimerRef.current) {
+      clearInterval(holdTimerRef.current)
+      holdTimerRef.current = null
+    }
+    setHoldProgress(0)
+  }
+
   return (
     <div
       style={{
@@ -121,80 +175,146 @@ function PlantPicker({ selectedPlantId, onSelect, onClearGarden }) {
         left: 20,
         background: 'rgba(255, 255, 255, 0.92)',
         borderRadius: 12,
-        padding: 16,
         boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
         zIndex: 10,
         maxWidth: 220,
+        overflow: 'hidden',
       }}
     >
-      <h3 style={{ marginBottom: 12, fontSize: 14, fontWeight: 600, color: '#2d3a1f' }}>
-        Plant Picker
-      </h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-        {PLANTS.map((plant) => {
-          const isSelected = plant.id === selectedPlantId
-          return (
-            <button
-              key={plant.id}
-              onClick={() => onSelect(plant.id)}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 4,
-                padding: 8,
-                border: isSelected ? '2px solid #4a7c3a' : '2px solid transparent',
-                background: isSelected ? '#e8f3df' : '#f5f5f5',
-                borderRadius: 8,
-                cursor: 'pointer',
-                fontSize: 11,
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <div
-                style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: '50%',
-                  background: plant.color,
-                  border: '1px solid rgba(0,0,0,0.1)',
-                }}
-              />
-              <span style={{ color: '#333' }}>{plant.name}</span>
-            </button>
-          )
-        })}
-      </div>
       <button
-        onClick={() => {
-          if (window.confirm('Clear the entire garden? This cannot be undone.')) {
-            onClearGarden()
-          }
-        }}
+        onClick={() => setIsOpen(!isOpen)}
         style={{
-          marginTop: 12,
           width: '100%',
-          padding: '8px 12px',
-          background: '#c14545',
-          color: 'white',
+          padding: '12px 16px',
+          background: 'transparent',
           border: 'none',
-          borderRadius: 8,
           cursor: 'pointer',
-          fontSize: 12,
-          fontWeight: 500,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: 14,
+          fontWeight: 600,
+          color: '#2d3a1f',
         }}
       >
-        Clear Garden
+        <span>Plant Picker</span>
+        <span style={{ fontSize: 12, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+          ▼
+        </span>
       </button>
-      <p style={{ marginTop: 8, fontSize: 11, color: '#666', lineHeight: 1.4 }}>
-        Click ground to place. Click plant to delete. Garden saves automatically.
-      </p>
+
+      {isOpen && (
+        <div style={{ padding: '0 16px 16px 16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+            {PLANTS.map((plant) => {
+              const isSelected = plant.id === selectedPlantId
+              return (
+                <button
+                  key={plant.id}
+                  onClick={() => onSelect(plant.id)}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: 8,
+                    border: isSelected ? '2px solid #4a7c3a' : '2px solid transparent',
+                    background: isSelected ? '#e8f3df' : '#f5f5f5',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: '50%',
+                      background: plant.color,
+                      border: '1px solid rgba(0,0,0,0.1)',
+                    }}
+                  />
+                  <span style={{ color: '#333' }}>{plant.name}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #e0e0e0' }}>
+            <h4 style={{ fontSize: 12, fontWeight: 600, color: '#2d3a1f', marginBottom: 8 }}>
+              Ground
+            </h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+              {GROUND_TYPES.map((ground) => {
+                const isSelected = ground.id === groundTypeId
+                return (
+                  <button
+                    key={ground.id}
+                    onClick={() => onGroundSelect(ground.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: 6,
+                      border: isSelected ? '2px solid #4a7c3a' : '2px solid transparent',
+                      background: isSelected ? '#e8f3df' : '#f5f5f5',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 16,
+                        height: 16,
+                        borderRadius: 4,
+                        background: ground.color,
+                        border: '1px solid rgba(0,0,0,0.1)',
+                      }}
+                    />
+                    <span style={{ color: '#333' }}>{ground.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <button
+            onMouseDown={startHold}
+            onMouseUp={cancelHold}
+            onMouseLeave={cancelHold}
+            onTouchStart={startHold}
+            onTouchEnd={cancelHold}
+            style={{
+              marginTop: 12,
+              width: '100%',
+              padding: '8px 12px',
+              background: `linear-gradient(to right, #8b1f1f ${holdProgress * 100}%, #c14545 ${holdProgress * 100}%)`,
+              color: 'white',
+              border: 'none',
+              borderRadius: 8,
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 500,
+              userSelect: 'none',
+              transition: 'background 0.05s linear',
+            }}
+          >
+            {holdProgress > 0 ? 'Keep holding...' : 'Hold to Clear Garden'}
+          </button>
+          <p style={{ marginTop: 8, fontSize: 11, color: '#666', lineHeight: 1.4 }}>
+            Click ground to place. Click plant to delete. Hold red button 1 second to clear.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
 
 function App() {
   const [selectedPlantId, setSelectedPlantId] = useState('oak')
+  const [groundTypeId, setGroundTypeId] = useState('grass')
   const [plants, setPlants] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -225,6 +345,8 @@ function App() {
         selectedPlantId={selectedPlantId}
         onSelect={setSelectedPlantId}
         onClearGarden={handleClearGarden}
+        groundTypeId={groundTypeId}
+        onGroundSelect={setGroundTypeId}
       />
       <Canvas
         shadows
@@ -234,6 +356,7 @@ function App() {
           selectedPlantId={selectedPlantId}
           plants={plants}
           setPlants={setPlants}
+          groundType={getGroundById(groundTypeId)}
         />
       </Canvas>
     </div>

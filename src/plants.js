@@ -90,4 +90,34 @@ export const PLANTS = [
 // Helper to look up a plant by id
 export function getPlantById(id) {
   return PLANTS.find((p) => p.id === id)
+}export const GROUND_TYPES = [
+  {
+    id: 'grass',
+    name: 'Grass',
+    texture: null,
+    color: '#4a7c3a',
+  },
+  // Dirt Sand Gravel stay the same
+  {
+    id: 'dirt',
+    name: 'Dirt',
+    texture: null,
+    color: '#6b4423',
+  },
+  {
+    id: 'sand',
+    name: 'Sand',
+    texture: null,
+    color: '#d4b483',
+  },
+  {
+    id: 'gravel',
+    name: 'Gravel',
+    texture: null,
+    color: '#7a7a78',
+  },
+]
+
+export function getGroundById(id) {
+  return GROUND_TYPES.find((g) => g.id === id)
 }
