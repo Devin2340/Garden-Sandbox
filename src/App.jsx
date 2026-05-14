@@ -1,7 +1,9 @@
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Sky } from '@react-three/drei'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { PLANTS, getPlantById } from './plants'
+
+const STORAGE_KEY = 'garden-sandbox-v1'
 
 function Ground({ onClick }) {
   return (
@@ -36,8 +38,7 @@ function Plant({ position, plantId, onClick }) {
   )
 }
 
-function Scene({ selectedPlantId }) {
-  const [plants, setPlants] = useState([])
+function Scene({ selectedPlantId, plants, setPlants }) {
   const orbitRef = useRef()
 
   const handleControlsChange = () => {
@@ -111,7 +112,7 @@ function Scene({ selectedPlantId }) {
   )
 }
 
-function PlantPicker({ selectedPlantId, onSelect }) {
+function PlantPicker({ selectedPlantId, onSelect, onClearGarden }) {
   return (
     <div
       style={{
@@ -164,8 +165,29 @@ function PlantPicker({ selectedPlantId, onSelect }) {
           )
         })}
       </div>
-      <p style={{ marginTop: 12, fontSize: 11, color: '#666', lineHeight: 1.4 }}>
-        Click ground to place. Click plant to delete.
+      <button
+        onClick={() => {
+          if (window.confirm('Clear the entire garden? This cannot be undone.')) {
+            onClearGarden()
+          }
+        }}
+        style={{
+          marginTop: 12,
+          width: '100%',
+          padding: '8px 12px',
+          background: '#c14545',
+          color: 'white',
+          border: 'none',
+          borderRadius: 8,
+          cursor: 'pointer',
+          fontSize: 12,
+          fontWeight: 500,
+        }}
+      >
+        Clear Garden
+      </button>
+      <p style={{ marginTop: 8, fontSize: 11, color: '#666', lineHeight: 1.4 }}>
+        Click ground to place. Click plant to delete. Garden saves automatically.
       </p>
     </div>
   )
@@ -173,18 +195,46 @@ function PlantPicker({ selectedPlantId, onSelect }) {
 
 function App() {
   const [selectedPlantId, setSelectedPlantId] = useState('oak')
+  const [plants, setPlants] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch (e) {
+      console.warn('Failed to load saved garden:', e)
+    }
+    return []
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(plants))
+    } catch (e) {
+      console.warn('Failed to save garden:', e)
+    }
+  }, [plants])
+
+  const handleClearGarden = () => {
+    setPlants([])
+  }
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
       <PlantPicker
         selectedPlantId={selectedPlantId}
         onSelect={setSelectedPlantId}
+        onClearGarden={handleClearGarden}
       />
       <Canvas
         shadows
         camera={{ position: [10, 10, 10], fov: 50 }}
       >
-        <Scene selectedPlantId={selectedPlantId} />
+        <Scene
+          selectedPlantId={selectedPlantId}
+          plants={plants}
+          setPlants={setPlants}
+        />
       </Canvas>
     </div>
   )
